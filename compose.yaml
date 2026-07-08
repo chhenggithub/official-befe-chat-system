@@ -8,6 +8,7 @@ services:
         volumes:
             - ./laravel-app:/var/www/html
             - ./docker/laravel/entrypoint.development.sh:/usr/local/bin/entrypoint.development.sh
+            - ./docker/laravel/supervisord.development.conf:/etc/supervisor/conf.d/supervisord.development.conf
         ports:
             - "8000:8000"
         depends_on:
