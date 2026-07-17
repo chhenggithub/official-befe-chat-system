@@ -30,6 +30,4 @@ RUN chown -R www-data:www-data /var/www/html/bootstrap/cache \
     && chown -R www-data:www-data /var/www/html/storage \
     && chmod +x /usr/local/bin/*.sh
 
-RUN composer install
-
 EXPOSE 8000

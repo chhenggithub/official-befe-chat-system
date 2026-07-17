@@ -101,6 +101,7 @@ import {
   apiUpdateUser,
   apiReadUser,
   apiDeleteUser,
+  apiToggleUserStatus,
 } from "@/functions/api/user";
 import { CloseModal, LoadingModal, MessageModal } from "@/functions/swal";
 import { onMounted, ref, h, reactive, watch } from "vue";
@@ -152,6 +153,23 @@ const columns = [
     accessorKey: "email",
   },
   {
+    header: "Status",
+    accessorKey: "status",
+    cell: ({
+      row: {
+        original: { status },
+      },
+    }) =>
+      h(
+        "span",
+        {
+          class:
+            status === "ENABLED" ? "badge badge-success" : "badge badge-danger",
+        },
+        status,
+      ),
+  },
+  {
     accessorKey: "action",
     header: () => [
       "Actions",
@@ -166,7 +184,7 @@ const columns = [
     ],
     cell: ({
       row: {
-        original: { id },
+        original: { id, status },
       },
     }) => [
       // delete btn
@@ -186,6 +204,19 @@ const columns = [
           class: "btn btn-sm btn-outline-secondary mx-1",
         },
         h("i", { class: "fa fa-pen" }),
+      ),
+      // toggle status btn
+      h(
+        "button",
+        {
+          onClick: () => toggleUserStatus(id),
+          class:
+            status === "ENABLED"
+              ? "btn btn-sm btn-danger mx-1"
+              : "btn btn-sm btn-success mx-1",
+          title: status === "ENABLED" ? "Disable User" : "Enable User",
+        },
+        h("i", { class: status === "ENABLED" ? "fa fa-ban" : "fa fa-check" }),
       ),
     ],
     enableSorting: false,
@@ -355,6 +386,25 @@ async function removeUser(id) {
       }
     }
   });
+}
+
+async function toggleUserStatus(id) {
+  try {
+    LoadingModal();
+    const response = await apiToggleUserStatus(id);
+    onUserUpdate(response.data.user);
+    return MessageModal({
+      icon: "success",
+      title: "Success",
+      text: response.data.message,
+    });
+  } catch (error) {
+    return MessageModal({
+      icon: "error",
+      title: "Error",
+      text: error.message || error.response.data.message,
+    });
+  }
 }
 
 function showModal() {
