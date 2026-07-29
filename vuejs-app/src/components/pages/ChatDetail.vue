@@ -83,6 +83,15 @@
                     Update Chat
                   </button>
                 </div>
+                <div class="form-group" v-if="isAdmin">
+                  <button
+                    type="button"
+                    class="btn btn-outline-primary btn-block"
+                    @click="AddChatMemberModalRef.showModal()"
+                  >
+                    Add Members
+                  </button>
+                </div>
                 <div class="form-group">
                   <button
                     type="button"
@@ -132,6 +141,12 @@
       </div>
     </div>
   </div>
+  <AddChatMemberModal
+    ref="AddChatMemberModalRef"
+    :chatId="props.chatId"
+    :members="members"
+    :onMemberAdded="generateChatMembers"
+  />
 </template>
 <script setup>
 import { reactive, ref, watch, h, computed } from "vue";
@@ -151,6 +166,9 @@ import Swal from "sweetalert2";
 import CustomTablePaginated from "@/components/includes/controls/CustomTablePaginated.vue";
 import { utcToLocal } from "@/functions/datetime";
 import { useUserStore } from "@/stores/user";
+import AddChatMemberModal from "@/components/includes/modals/AddChatMemberModal.vue";
+
+const AddChatMemberModalRef = ref(null);
 const userStore = useUserStore();
 const recentChatsStore = useRecentChatsStore();
 const router = useRouter();
