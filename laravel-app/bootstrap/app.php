@@ -16,9 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware
-            ->append([
-                UnicodeCorrection::class
-            ])
+            // ->append([
+            //     UnicodeCorrection::class
+            // ])
             ->alias([
                 'admin' => AdminMiddleware::class,
                 'enabled' => CheckEnabledMiddleware::class,

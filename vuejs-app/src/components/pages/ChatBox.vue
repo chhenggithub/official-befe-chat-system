@@ -52,7 +52,38 @@
                         : 'text-left float-left'
                     "
                   >
-                    {{ message.content }}
+                    <template v-if="editingMessageId === message.id">
+                      <div class="input-group input-group-sm">
+                        <input
+                          v-model="editContent"
+                          type="text"
+                          class="form-control"
+                          maxlength="5000"
+                          @keyup.enter="saveEdit(message.id)"
+                          @keyup.esc="cancelEdit"
+                        />
+                        <span class="input-group-append">
+                          <button
+                            type="button"
+                            class="btn btn-success btn-sm"
+                            @click="saveEdit(message.id)"
+                            :disabled="!editContent.trim()"
+                          >
+                            <i class="fas fa-check"></i>
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            @click="cancelEdit"
+                          >
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </span>
+                      </div>
+                    </template>
+                    <template v-else>
+                      {{ message.content }}
+                    </template>
                   </div>
                 </div>
                 <div class="direct-chat-infos clearfix">
@@ -65,7 +96,17 @@
                   >
                   <i
                     v-if="isOwnMessage(message)"
-                    class="fas fa-trash-alt text-danger float-right mt-1 mx-3"
+                    @click="deleteMessage(message.id)"
+                    class="fas fa-trash-alt text-danger float-right mt-1 mx-1"
+                    style="cursor: pointer"
+                    title="Delete message"
+                  ></i>
+                  <i
+                    v-if="isOwnMessage(message) && isTextMessage(message)"
+                    @click="startEditMessage(message)"
+                    class="fas fa-edit text-primary float-right mt-1 mx-1"
+                    style="cursor: pointer"
+                    title="Edit message"
                   ></i>
                 </div>
                 <hr />
@@ -74,16 +115,24 @@
             <!--/.direct-chat-messages-->
           </div>
           <div class="card-footer">
-            <form action="#" method="post">
+            <form @submit.prevent="sendMessage">
               <div class="input-group">
                 <input
+                  v-model="messageContent"
                   type="text"
                   name="message"
                   placeholder="Type Message ..."
                   class="form-control"
+                  maxlength="5000"
                 />
                 <span class="input-group-append">
-                  <button type="button" class="btn btn-primary">Send</button>
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    :disabled="!messageContent.trim()"
+                  >
+                    Send
+                  </button>
                 </span>
               </div>
             </form>
@@ -95,14 +144,22 @@
 </template>
 
 <script setup>
-import { watch, ref, onMounted, nextTick, computed } from "vue";
+import { watch, ref, onMounted, computed } from "vue";
 import emptyImage from "@/assets/images/emptyImage.png";
 import { useUserStore } from "@/stores/user";
 import { useRecentChatsStore } from "@/stores/recentChats";
 import { formatChatTime } from "@/functions/datetime";
-import { apiGetChatMessages } from "@/functions/api/chat";
+import {
+  apiGetChatMessages,
+  apiCreateChatMessage,
+  apiUpdateChatMessage,
+  apiDeleteChatMessage,
+  apiMarkAllChatMessagesAsSeen,
+} from "@/functions/api/chat";
 import $ from "jquery";
 import { apiReadChat } from "@/functions/api/chat";
+import Swal from "sweetalert2";
+import { MessageModal } from "@/functions/swal";
 
 const userStore = useUserStore();
 const recentChatsStore = useRecentChatsStore();
@@ -114,11 +171,111 @@ const props = defineProps({
 });
 
 // Local state for messages (independent of store)
+
+// Message input
+const messageContent = ref("");
 const chat = computed(() => recentChatsStore.getChatById(props.chatId));
+
+// Edit state
+const editingMessageId = ref(null);
+const editContent = ref("");
 
 function isOwnMessage(message) {
   if (!message) return false;
   return message.creator.id === userStore.id;
+}
+
+function isTextMessage(message) {
+  return message?.type === "text";
+}
+
+function startEditMessage(message) {
+  editingMessageId.value = message.id;
+  editContent.value = message.content;
+}
+
+function cancelEdit() {
+  editingMessageId.value = null;
+  editContent.value = "";
+}
+
+async function saveEdit(messageId) {
+  if (!editContent.value.trim()) {
+    return;
+  }
+
+  try {
+    const response = await apiUpdateChatMessage(
+      props.chatId,
+      messageId,
+      editContent.value,
+    );
+    recentChatsStore.syncChatMessage(props.chatId, response.data.chat_message);
+    editingMessageId.value = null;
+    editContent.value = "";
+  } catch (error) {
+    return MessageModal({
+      icon: "error",
+      title: "Error",
+      text: error.response?.data?.message || error.message,
+    });
+  }
+}
+
+async function sendMessage() {
+  if (!messageContent.value.trim()) {
+    return;
+  }
+
+  try {
+    const response = await apiCreateChatMessage(
+      props.chatId,
+      messageContent.value,
+    );
+
+    // Add message to store
+    recentChatsStore.syncChatMessage(props.chatId, response.data.chat_message);
+
+    // Clear input
+    messageContent.value = "";
+
+    scrollToBottom();
+  } catch (error) {
+    return MessageModal({
+      icon: "error",
+      title: "Error",
+      text: error.response?.data?.message || error.message,
+    });
+  }
+}
+
+async function deleteMessage(messageId) {
+  Swal.fire({
+    icon: "warning",
+    title: "Delete Message",
+    text: "Are you sure you want to delete this message?",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    confirmButtonText: "Yes, delete it!",
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const response = await apiDeleteChatMessage(props.chatId, messageId);
+        recentChatsStore.removeChatMessage(props.chatId, messageId);
+        return MessageModal({
+          icon: "success",
+          title: "Success",
+          text: response.data.message,
+        });
+      } catch (error) {
+        return MessageModal({
+          icon: "error",
+          title: "Error",
+          text: error.response?.data?.message || error.message,
+        });
+      }
+    }
+  });
 }
 
 const currentPage = ref(1);
@@ -156,6 +313,14 @@ async function loadMessages(page = 1) {
     lastPage.value = response.data.meta.last_page;
   } catch (error) {
     console.error("Error loading messages:", error);
+  }
+}
+
+async function markMessagesAsSeen() {
+  try {
+    await apiMarkAllChatMessagesAsSeen(props.chatId);
+  } catch (error) {
+    console.error("Error marking messages as seen:", error);
   }
 }
 
@@ -224,11 +389,15 @@ watch(
     isLoadingMore.value = false;
     currentPage.value = 1;
     lastPage.value = 1;
+    messageContent.value = ""; // Clear message input when switching chats
+    editingMessageId.value = null; // Cancel any ongoing edit
+    editContent.value = "";
 
     await loadChat();
     // await loadMessages(1);
     scrollToBottom();
     setupScrollListener();
+    await markMessagesAsSeen();
   },
 );
 
@@ -238,5 +407,6 @@ onMounted(async () => {
   await loadMessages(1);
   scrollToBottom();
   setupScrollListener();
+  await markMessagesAsSeen();
 });
 </script>
