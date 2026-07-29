@@ -6,7 +6,12 @@
     data-accordion="false"
   >
     <li class="nav-item" v-for="chat in chats" :key="chat.id">
-      <a role="button" class="nav-link" active-class="active">
+      <RouterLink
+        :to="{ name: 'chat.box', params: { chatId: chat.id } }"
+        class="nav-link"
+        active-class="active"
+        role="button"
+      >
         <img
           class="nav-icon img-circle elevation-3 my-1"
           :src="chat.avatar || emptyImage"
@@ -42,14 +47,14 @@
           <i class="far fa-comment-dots"></i>
           <i class="fas fa-microphone"></i>
         </p>
-      </a>
+      </RouterLink>
     </li>
   </ul>
 </template>
 
 <script setup>
 import emptyImage from "@/assets/images/emptyImage.png";
-import { formatChatTime } from "@/classes/datetime";
+import { formatChatTime } from "@/functions/datetime";
 import { useUserStore } from "@/stores/user";
 
 const userStore = useUserStore();
@@ -61,12 +66,12 @@ const props = defineProps({
 });
 
 function lastMessage(chat) {
-  return chat.messages[chat.messages.length - 1];
+  return chat.messages[chat.messages.length - 1] || null;
 }
 
 function isOwnMessage(message) {
   if (!message) return false;
-  return !(message.creator.id === userStore.id);
+  return message.creator.id === userStore.id;
 }
 
 function isSeen(message) {
