@@ -88,6 +88,18 @@
                         style="max-width: 250px"
                       ></audio>
                     </template>
+                    <template v-else-if="message.type === 'image'">
+                      <img
+                        :src="message.fileBlob"
+                        style="
+                          max-width: 250px;
+                          border-radius: 4px;
+                          cursor: pointer;
+                        "
+                        @click="openImagePreview(message.fileBlob)"
+                        alt="image message"
+                      />
+                    </template>
                     <template v-else>
                       {{ message.content }}
                     </template>
@@ -138,6 +150,12 @@
                     {{ formatRecordingTime(recordingSeconds) }}
                   </span>
                 </template>
+                <template v-else-if="selectedImageFile">
+                  <span class="form-control d-flex align-items-center">
+                    <i class="fas fa-image mr-2 text-secondary"></i>
+                    {{ selectedImageFile.name }}
+                  </span>
+                </template>
                 <template v-else>
                   <input
                     v-model="messageContent"
@@ -150,6 +168,14 @@
                 </template>
                 <span class="input-group-append">
                   <button
+                    v-if="selectedImageFile"
+                    type="button"
+                    class="btn btn-secondary"
+                    @click="selectedImageFile = null"
+                  >
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                  <button
                     v-if="recordedBlob && !isRecording"
                     type="button"
                     class="btn btn-secondary"
@@ -158,7 +184,7 @@
                     <i class="fas fa-trash-alt"></i>
                   </button>
                   <button
-                    v-if="!recordedBlob"
+                    v-if="!recordedBlob && !selectedImageFile"
                     type="button"
                     class="btn"
                     :class="isRecording ? 'btn-danger' : 'btn-secondary'"
@@ -167,9 +193,28 @@
                     <i class="fas fa-microphone"></i>
                   </button>
                   <button
+                    v-if="!recordedBlob && !isRecording"
+                    type="button"
+                    class="btn btn-secondary"
+                    @click="$refs.imageInput.click()"
+                  >
+                    <i class="fas fa-image"></i>
+                  </button>
+                  <input
+                    ref="imageInput"
+                    type="file"
+                    accept="image/jpg,image/jpeg,image/png,image/gif,image/webp"
+                    style="display: none"
+                    @change="onImageSelected"
+                  />
+                  <button
                     type="submit"
                     class="btn btn-primary"
-                    :disabled="!recordedBlob && !messageContent.trim()"
+                    :disabled="
+                      !recordedBlob &&
+                      !messageContent.trim() &&
+                      !selectedImageFile
+                    "
                   >
                     Send
                   </button>
@@ -193,6 +238,7 @@ import {
   apiGetChatMessages,
   apiCreateChatMessage,
   apiCreateVoiceChatMessage,
+  apiCreateImageChatMessage,
   apiUpdateChatMessage,
   apiDeleteChatMessage,
   apiMarkAllChatMessagesAsSeen,
@@ -238,6 +284,40 @@ function startEditMessage(message) {
 function cancelEdit() {
   editingMessageId.value = null;
   editContent.value = "";
+}
+
+// Image upload state
+const selectedImageFile = ref(null);
+
+function onImageSelected(event) {
+  const file = event.target.files[0];
+  if (file) {
+    selectedImageFile.value = file;
+  }
+  event.target.value = "";
+}
+
+async function sendImageMessage(file) {
+  try {
+    const response = await apiCreateImageChatMessage(props.chatId, file);
+    recentChatsStore.syncChatMessage(props.chatId, response.data.chat_message);
+    scrollToBottom();
+  } catch (error) {
+    return MessageModal({
+      icon: "error",
+      title: "Error",
+      text: error.response?.data?.message || error.message,
+    });
+  }
+}
+
+function openImagePreview(src) {
+  Swal.fire({
+    imageUrl: src,
+    imageAlt: "Image message",
+    showConfirmButton: false,
+    showCloseButton: true,
+  });
 }
 
 // Voice recording state
@@ -343,6 +423,12 @@ async function saveEdit(messageId) {
 }
 
 async function sendMessage() {
+  if (selectedImageFile.value) {
+    await sendImageMessage(selectedImageFile.value);
+    selectedImageFile.value = null;
+    return;
+  }
+
   if (recordedBlob.value) {
     await sendVoiceMessage(recordedBlob.value);
     resetRecordingState();
@@ -517,7 +603,8 @@ watch(
     messageContent.value = ""; // Clear message input when switching chats
     editingMessageId.value = null; // Cancel any ongoing edit
     editContent.value = "";
-    resetRecordingState(); // Reset recording state when switching chatss
+    resetRecordingState(); // Reset recording state when switching chats
+    selectedImageFile.value = null; // Reset selected image when switching chats
 
     await loadChat();
     // await loadMessages(1);
